@@ -189,7 +189,7 @@ static void *_agent(void * unused)
 	PMIXP_DEBUG("Start agent thread");
 	eio_obj_t *srv_obj, *cli_obj;
 
-	pmix_io_handle = eio_handle_create(0);
+	pmix_io_handle = eio_handle_create();
 
 
 	srv_obj = eio_obj_create(pmixp_info_srv_fd(), &srv_ops, (void *)(-1));
