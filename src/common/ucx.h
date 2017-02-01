@@ -1,108 +1,54 @@
-#ifndef _SLURM_UCX_H_
-#define _SLURM_UCX_H_
-
-#include <stdint.h>
-
-
-typedef enum {
-	SLURM_UCX_SRV,
-	SLURM_UCX_CLI
-} slurm_ucx_type_t;
-
-typedef struct {
-	slurm_ucx_type_t type;
-	union {
-		char *hname;
-		struct {
-			char *data;
-			size_t len;
-		} address;
-	} addr;
-} slurm_ucx_address_t;
-
-/* get UCX address
- * for the serer it returns hostname
- * for the client it will be an address obtained from UCX
- */
-int slurm_ucx_addr(slurm_ucx_address_t *addr);
-
-/* get this process UCX role */
-slurm_ucx_type_t slurm_ucx_whoami();
-
-/*
- * Verify that we can use UCX for the target
- * Always return false if UCX wasn't initialized
- */
-int slurm_ucx_reachable(slurm_ucx_address_t *addr);
+#include <stdio.h>
+#include <poll.h>
+#include <ucp/api/ucp.h>
+#include <ucp/api/ucp_def.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 
-/*
- * fd - newly created virtual connection descriptor
- * buf, size - received message
- * obj - smth user provided to us, will be NULL I guess
- * NOTE: fd doesn't correspond to a certain EP at the time of this call as
- * the sender is unknown. Once message is processed EP will be initialized and added
- * using slurm_ucx_bind(fd, slurm_ucx_address_t addr);
- * also the tag of the initiation message has to be stored internally
- * so the response will reach correct receiver on the EP.
- */
-typedef void (*slurm_ucx_srv_cb_t)(int fd, void *buf, size_t size, void *obj);
+#define SLURM_UCX_SUCCESS (0)
+#define SLURM_UCX_ERROR (-1)
 
-/*
- * fd - file descriptor that will be used for polling
- * cb - a callback that UCX module will call when message is received
- * obj - arbitrary data that callback may need to use
- */
-int slurm_ucx_init_server(char *fname, slurm_ucx_srv_cb_t cb, void *obj);
 
-/*
- * Map fd with an address (on the server side)
- */
-int slurm_ucx_bind(int fd, slurm_ucx_address_t addr);
+typedef enum slurm_ucx_type {
+	SLURM_UCX_SERVER,
+	SLURM_UCX_CLIENT,
+} clurm_ucx_type_t;
 
-/*
- * Initialize UCX component for the client
- * Incurs a separate progress thread creation to call
- * ucx progress and calling registered callbacks
- */
+enum slurm_ucx_ep_status {
+	SLURM_UCX_EP_IN_USE,
+	SLURM_UCX_EP_FREE,
+};
+
+#define SLURM_UCX_EP_LIST_LEN (1024)
+
+struct slurm_ucx_ep_table {
+	int id;
+	int status;
+	ucp_ep_h ep;
+};
+
+struct slurm_ucx_sever_conn_cache_item {
+	char sname[256];
+	ucp_ep_h ep;
+	struct slurm_ucx_sever_conn_cache_item *next;
+};
+
+
+extern int errno;
+#include <errno.h>
+
+int slurm_ucx_init_server();
 int slurm_ucx_init_client();
-
-
-/*
- * client-side receiv callback
- */
-typedef void (*slurm_ucx_cli_cb_t)(int fd, void *buf, size_t size, void *obj);
-
-/*
- * open the virtual connection to a remote server
- * addr - remote endpoint address
- *
- */
-int slurm_ucx_conn(slurm_ucx_address_t *addr, slurm_ucx_cli_cb_t cb, void *obj);
-
-/*
- * close the virtual connection to a remote server
- * addr - remote endpoint address
- *
- */
-int slurm_ucx_conn_close(int fd);
-
-/*
- * progress both client and server
- */
+int slurm_ucx_open_connection(char *name);
+int slurm_ucx_open_conn_address(char *saddr, int saddr_len);
+int slurm_ucx_close_connection(int fd);
+char *slurm_ucx_hostname();
+int slurm_ucx_whoami();
+unsigned long  slurm_ucx_addr_len();
+char * slurm_ucx_get_addr();
+int slurm_ucx_reachable(char *name);
 void slurm_ucx_progress();
+int slurm_ucx_send(int fd, void *buffer, size_t len);
 
-/*
- * Prepare server for polling.
- *
- */
-void slurm_ucx_poll_prep();
-
-/*
- * Prepare server for polling.
- *
- */
-void slurm_ucx_send(int fd, void *buf, size_t size);
-
-
-#endif
